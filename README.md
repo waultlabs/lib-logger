@@ -2,6 +2,16 @@
 
 Federated TypeScript/Node.js logger, compatible with local and cloud (AWS, Docker, etc.), with smart auto-configuration or manual setup.
 
+## Installation
+
+A package is available thru the GitHub NPM registry. Configure your `~/.npmrc` accordingly.
+
+    echo "@waultlabs:registry=https://npm.pkg.github.com/" >> ~/.npmrc
+
+Then, install as usual.
+
+    npm i @waultlabs/lib-logger
+
 ## Available log levels
 
 | Level   | Method  | Priority | Description              |

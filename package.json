@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/waultlabs/lib-logger.git"
+    "url": "git+https://github.com/waultlabs/lib-logger.git"
   },
   "engines": {
     "node": ">=22.0.0"
