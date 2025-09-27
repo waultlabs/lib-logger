@@ -30,13 +30,13 @@ export const prettyTransport: () => Transport<ProcessableLogEntry>;
 
 declare const logger: {
   configure: (options?: LoggerOptions) => Promise<void>;
+  fatal: (record: LogEntry | string) => Promise<void>;
   error: (record: LogEntry | string) => Promise<void>;
   warn: (record: LogEntry | string) => Promise<void>;
   info: (record: LogEntry | string) => Promise<void>;
   http: (record: LogEntry | string) => Promise<void>;
   verbose: (record: LogEntry | string) => Promise<void>;
-  debug: (record: LogEntry | string) => Promise<void>;
-  silly: (record: LogEntry | string) => Promise<void>;
+  trace: (record: LogEntry | string) => Promise<void>;
   out: (message: string) => void;
 };
 
