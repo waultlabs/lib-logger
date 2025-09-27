@@ -1,3 +1,9 @@
+export interface LogLevel {
+  label: string;
+  priority: number;
+  color: string;
+}
+
 export type Transport<T> = (data: T) => void | Promise<void>;
 
 export interface LoggerOptions {
