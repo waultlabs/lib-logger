@@ -16,6 +16,7 @@ export interface Firehose<T> {
   writable: Writable;
   transform: Transform;
   transports: Transport<T>[];
+  level: LogLevel;
 }
 
 export interface FirehoseConfiguration {
@@ -25,11 +26,6 @@ export interface FirehoseConfiguration {
 // Buffer to hold logs before they are processed
 // This is useful for testing or when the firehose is not yet initialized
 const buffer: any[] = [];
-
-// configuration of the firehose
-const conf: FirehoseConfiguration = {
-  level: Level.INFO,
-};
 
 // Create a firehose
 export function createFirehose<T>(
@@ -67,17 +63,20 @@ export function createFirehose<T>(
     },
   });
 
+  // Default configuration
+  let level: LogLevel = Level.INFO;
+
   // process configuration object
   if (userconfig) {
     // configure log level
     if (userconfig.level && typeof userconfig.level === 'string') {
       if (Object.keys(Level).indexOf(userconfig.level.toUpperCase()) !== -1) {
-        conf.level = Level[userconfig.level.toUpperCase()];
+        level = Level[userconfig.level.toUpperCase()];
       }
     }
   }
 
-  return { writable, transform, transports };
+  return { writable, transform, transports, level };
 }
 
 // Register a transport
@@ -97,7 +96,7 @@ export function pushLog<T>(firehose: Firehose<T>, log: T): void {
     // push the buffered logs
     while (buffer.length > 0) {
       const log = buffer.shift();
-      if (log && log.level.priority <= (conf.level as LogLevel).priority) {
+      if (log && log.level.priority <= firehose.level.priority) {
         firehose.writable.write(log);
       } else {
         // Discard log entries above the configured level

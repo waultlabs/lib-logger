@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterAll, vi } from 'vitest';
 import logger from '../libs/logger';
 
 /**
@@ -12,7 +12,7 @@ describe('Logging utilities', () => {
     test(`log: ${level.padEnd(7, ' ')} ${withComponent ? '(object)' : '(direct)'}`, async () => {
       if (withComponent) {
         await logger[level]({
-          component: 'testComponent',
+          module: 'testModule',
           message: 'test',
         });
       } else {
@@ -26,9 +26,10 @@ describe('Logging utilities', () => {
    * Before all tests: make sure to clear any previous mocks
    */
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logger.reset();
     await logger.configure({ level: 'trace' });
   });
 
@@ -44,7 +45,15 @@ describe('Logging utilities', () => {
   });
 
   describe('Test the logging facility', () => {
-    const levels = ['fatal', 'error', 'warn', 'info', 'http', 'verbose'];
+    const levels = [
+      'fatal',
+      'error',
+      'warn',
+      'info',
+      'http',
+      'verbose',
+      'trace',
+    ];
     for (const mode of [false, true])
       for (const l of levels) logUnitTest(l, mode);
   });

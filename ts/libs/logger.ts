@@ -66,6 +66,14 @@ const configure = async (options: LoggerOptions = {}): Promise<void> => {
       firehose = createFirehose<ProcessableLogEntry>({
         level: options.level || process.env.LOG_LEVEL || 'info',
       });
+    } else {
+      // Update level if firehose already exists
+      const level = options.level || process.env.LOG_LEVEL || 'info';
+      if (typeof level === 'string') {
+        if (Object.keys(Levels).indexOf(level.toUpperCase()) !== -1) {
+          firehose.level = Levels[level.toUpperCase()];
+        }
+      }
     }
     // Register transports
     if (options.transports && options.transports.length > 0) {
@@ -161,6 +169,16 @@ const out = (message: string) => {
 };
 
 /**
+ * Reset function for testing - clears all state
+ */
+const reset = () => {
+  firehose = undefined;
+  configPromise = null;
+  pendingLogs = [];
+  isConfigured = false;
+};
+
+/**
  * Export the logger object
  */
 
@@ -174,4 +192,5 @@ export default {
   verbose,
   trace,
   out,
+  reset,
 };
