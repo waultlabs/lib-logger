@@ -1,9 +1,9 @@
-import fs from 'fs';
+import { promises as fs } from 'fs';
 
 const docker = async (): Promise<RunningHardware> => {
   // check for typical docker file
   try {
-    fs.statSync('/.dockerenv');
+    await fs.access('/.dockerenv');
     return {
       provider: 'docker',
       subsystem: 'terminal',
@@ -15,7 +15,7 @@ const docker = async (): Promise<RunningHardware> => {
   }
   // analyze cgroup
   try {
-    const cgroupInfo = fs.readFileSync('/proc/1/cgroup', 'utf8');
+    const cgroupInfo = await fs.readFile('/proc/1/cgroup', 'utf8');
     if (cgroupInfo.includes('docker')) {
       return {
         provider: 'docker',

@@ -34,14 +34,6 @@ const configure = async (options: LoggerOptions = {}): Promise<void> => {
     return configPromise;
   }
 
-  pushLog(firehose!, {
-    level: Levels.VERBOSE,
-    timestamp: Date.now(),
-    message: 'creating firehose, registereing transports',
-    service: 'lib-logger',
-    module: 'lib-logger',
-  });
-
   configPromise = (async () => {
     if (options.service) service = options.service;
 

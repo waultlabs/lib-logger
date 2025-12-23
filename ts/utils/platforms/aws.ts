@@ -1,4 +1,4 @@
-import fs from 'fs';
+import { promises as fs } from 'fs';
 
 /**
  * Check if the current environment is running in AWS Lambda
@@ -21,7 +21,7 @@ const awslambda = async (): Promise<RunningHardware> => {
 const awsecs = async (): Promise<RunningHardware> => {
   // Check Docker
   try {
-    fs.statSync('/.dockerenv');
+    await fs.access('/.dockerenv');
     return {
       provider: 'aws',
       subsystem: 'ecs',
@@ -32,7 +32,7 @@ const awsecs = async (): Promise<RunningHardware> => {
     void 0;
   }
   try {
-    const cgroupInfo = fs.readFileSync('/proc/1/cgroup', 'utf8');
+    const cgroupInfo = await fs.readFile('/proc/1/cgroup', 'utf8');
     if (cgroupInfo.includes('docker')) {
       return {
         provider: 'aws',
@@ -73,7 +73,7 @@ const awsecs = async (): Promise<RunningHardware> => {
       };
     }
     try {
-      const cgroupInfo = fs.readFileSync('/proc/1/cgroup', 'utf8');
+      const cgroupInfo = await fs.readFile('/proc/1/cgroup', 'utf8');
       if (cgroupInfo.includes('ecs')) {
         return {
           provider: 'aws',
@@ -129,7 +129,7 @@ const awsec2 = async (): Promise<RunningHardware> => {
 
   // Check for EC2-specific files
   try {
-    const xenInfo = fs.readFileSync('/sys/hypervisor/uuid', 'utf8');
+    const xenInfo = await fs.readFile('/sys/hypervisor/uuid', 'utf8');
     if (xenInfo && xenInfo.startsWith('ec2')) {
       return {
         provider: 'aws',
@@ -143,7 +143,7 @@ const awsec2 = async (): Promise<RunningHardware> => {
   }
 
   try {
-    const awsInfo = fs.readFileSync(
+    const awsInfo = await fs.readFile(
       '/sys/devices/virtual/dmi/id/product_name',
       'utf8',
     );
