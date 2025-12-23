@@ -35,71 +35,83 @@ const configure = async (options: LoggerOptions = {}): Promise<void> => {
   }
 
   configPromise = (async () => {
-    if (options.service) service = options.service;
+    try {
+      if (options.service) service = options.service;
 
-    const runningHardware: RunningHardware = await detectRunningHardware();
-    let transport: Transport<ProcessableLogEntry>;
-    switch (runningHardware.transport) {
-      case 'console':
-        transport = consoleTransport();
-        break;
-      case 'pretty':
-        transport = prettyTransport();
-        break;
-      case 'json':
-        transport = jsonTransport();
-        break;
-      default:
-        transport = jsonTransport();
-        break;
-    }
+      const runningHardware: RunningHardware = await detectRunningHardware();
+      let transport: Transport<ProcessableLogEntry>;
+      switch (runningHardware.transport) {
+        case 'console':
+          transport = consoleTransport();
+          break;
+        case 'pretty':
+          transport = prettyTransport();
+          break;
+        case 'json':
+          transport = jsonTransport();
+          break;
+        default:
+          transport = jsonTransport();
+          break;
+      }
 
-    if (!firehose) {
-      firehose = createFirehose<ProcessableLogEntry>({
-        level: options.level || process.env.LOG_LEVEL || 'info',
-      });
-    } else {
-      // Update level if firehose already exists
-      const level = options.level || process.env.LOG_LEVEL || 'info';
-      if (typeof level === 'string') {
-        if (Object.keys(Levels).indexOf(level.toUpperCase()) !== -1) {
-          firehose.level = Levels[level.toUpperCase()];
+      if (!firehose) {
+        firehose = createFirehose<ProcessableLogEntry>({
+          level: options.level || process.env.LOG_LEVEL || 'info',
+        });
+      } else {
+        // Update level if firehose already exists
+        const level = options.level || process.env.LOG_LEVEL || 'info';
+        if (typeof level === 'string') {
+          if (Object.keys(Levels).indexOf(level.toUpperCase()) !== -1) {
+            firehose.level = Levels[level.toUpperCase()];
+          }
         }
       }
+      // Register transports
+      if (options.transports && options.transports.length > 0) {
+        firehose.transports.length = 0;
+        firehose.transports.push(...options.transports);
+      } else {
+        firehose.transports.push(transport);
+      }
+
+      // Mark configuration as complete
+      isConfigured = true;
+
+      // Say hello after transports are set up but before processing pending logs
+      pushLog(firehose!, {
+        level: Levels.VERBOSE,
+        timestamp: Date.now(),
+        message: 'firehose initialized, flushing buffered logs',
+        service: 'lib-logger',
+        module: 'lib-logger',
+      });
+
+      // Process any pending logs in order
+      for (const entry of pendingLogs) {
+        pushLog(firehose!, entry);
+      }
+      pendingLogs = []; // Clear the queue
+
+      pushLog(firehose!, {
+        level: Levels.VERBOSE,
+        timestamp: Date.now(),
+        message: 'buffered logs flushed',
+        service: 'lib-logger',
+        module: 'lib-logger',
+      });
+    } catch (error) {
+      console.error('Logger configuration error:', error);
+      // Fallback to basic console logging if configuration fails
+      isConfigured = true;
+      if (!firehose) {
+        firehose = createFirehose<ProcessableLogEntry>({
+          level: 'info',
+        });
+        firehose.transports.push(jsonTransport());
+      }
     }
-    // Register transports
-    if (options.transports && options.transports.length > 0) {
-      firehose.transports.length = 0;
-      firehose.transports.push(...options.transports);
-    } else {
-      firehose.transports.push(transport);
-    }
-
-    // Mark configuration as complete
-    isConfigured = true;
-
-    // Say hello after transports are set up but before processing pending logs
-    pushLog(firehose!, {
-      level: Levels.VERBOSE,
-      timestamp: Date.now(),
-      message: 'firehose initialized, flushing buffered logs',
-      service: 'lib-logger',
-      module: 'lib-logger',
-    });
-
-    // Process any pending logs in order
-    for (const entry of pendingLogs) {
-      pushLog(firehose!, entry);
-    }
-    pendingLogs = []; // Clear the queue
-
-    pushLog(firehose!, {
-      level: Levels.VERBOSE,
-      timestamp: Date.now(),
-      message: 'buffered logs flushed',
-      service: 'lib-logger',
-      module: 'lib-logger',
-    });
   })();
 
   return configPromise;
@@ -110,27 +122,32 @@ const configure = async (options: LoggerOptions = {}): Promise<void> => {
  */
 
 const log = async (level: LogLevel, record: LogEntry) => {
-  // prepare the statement
-  let entry: ProcessableLogEntry = {
-    level: level,
-    timestamp: Date.now(),
-    message: record.message,
-    service: record.service || service,
-    module: record.module || 'default',
-  };
-  if (record.userdata) {
-    entry = {
-      ...entry,
-      userdata: record.userdata,
+  try {
+    // prepare the statement
+    let entry: ProcessableLogEntry = {
+      level: level,
+      timestamp: Date.now(),
+      message: record.message,
+      service: record.service || service,
+      module: record.module || 'default',
     };
-  }
-  // If not configured, queue the log; otherwise, push immediately
-  if (!isConfigured || !firehose) {
-    pendingLogs.push(entry);
-    await configure({}); // Trigger zeroconf autoconf if not configured yet
-  } else {
-    await configPromise; // Wait for configuration to complete
-    pushLog(firehose, entry);
+    if (record.userdata) {
+      entry = {
+        ...entry,
+        userdata: record.userdata,
+      };
+    }
+    // If not configured, queue the log; otherwise, push immediately
+    if (!isConfigured || !firehose) {
+      pendingLogs.push(entry);
+      await configure({}); // Trigger zeroconf autoconf if not configured yet
+    } else {
+      await configPromise; // Wait for configuration to complete
+      pushLog(firehose, entry);
+    }
+  } catch (error) {
+    // Don't let logging errors crash the application
+    console.error('Logger internal error:', error);
   }
 };
 
@@ -140,10 +157,15 @@ const log = async (level: LogLevel, record: LogEntry) => {
 
 const createLogLevelMethod = (level: LogLevel) => {
   return async (record: LogEntry | string): Promise<void> => {
-    if (typeof record === 'string') {
-      await log(level, { message: record });
-    } else {
-      await log(level, record);
+    try {
+      if (typeof record === 'string') {
+        await log(level, { message: record });
+      } else {
+        await log(level, record);
+      }
+    } catch (error) {
+      // Prevent unhandled promise rejections from crashing the app
+      console.error('Logger method error:', error);
     }
   };
 };

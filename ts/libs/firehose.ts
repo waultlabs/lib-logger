@@ -51,6 +51,12 @@ export function createFirehose<T>(
     },
   });
 
+  // Add error handling to prevent process crashes
+  transform.on('error', (err) => {
+    console.error('Transform stream error:', err);
+    // Don't let stream errors crash the process
+  });
+
   // Writable stream for actors to push logs
   const writable = new Writable({
     objectMode: true,
@@ -61,6 +67,12 @@ export function createFirehose<T>(
     ) {
       transform.write(chunk, encoding, callback);
     },
+  });
+
+  // Add error handling to prevent process crashes
+  writable.on('error', (err) => {
+    console.error('Writable stream error:', err);
+    // Don't let stream errors crash the process
   });
 
   // Default configuration
@@ -97,7 +109,15 @@ export function pushLog<T>(firehose: Firehose<T>, log: T): void {
     while (buffer.length > 0) {
       const log = buffer.shift();
       if (log && log.level.priority <= firehose.level.priority) {
-        firehose.writable.write(log);
+        // Handle write errors gracefully and respect backpressure
+        firehose.writable.write(log, (error) => {
+          if (error) {
+            console.error('Logger write error:', error);
+            // Don't crash the process on write errors
+          }
+        });
+        // If write returns false, we should pause, but for logging we'll continue
+        // to prevent blocking the application
       } else {
         // Discard log entries above the configured level
         void 0;
