@@ -1,6 +1,6 @@
 {
   "name": "@waultlabs/lib-logger",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A federated logger for both local development and AWS",
   "keywords": [
     "logger",
@@ -61,5 +61,8 @@
     "ts-node": "10.9.2",
     "typescript": "5.9.2",
     "vitest": "3.2.4"
+  },
+  "volta": {
+    "node": "25.2.1"
   }
 }

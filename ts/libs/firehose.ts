@@ -17,18 +17,15 @@ export interface Firehose<T> {
   transform: Transform;
   transports: Transport<T>[];
   level: LogLevel;
+  drainLock?: Promise<void>;
 }
 
 export interface FirehoseConfiguration {
   level: string | LogLevel;
 }
 
-// Buffer to hold logs before they are processed
-// This is useful for testing or when the firehose is not yet initialized
-const buffer: any[] = [];
-
 // Create a firehose
-export function createFirehose<T>(
+export function createFirehose<T extends ProcessableLogEntry>(
   userconfig: FirehoseConfiguration,
 ): Firehose<T> {
   const transports: Transport<T>[] = [];
@@ -37,17 +34,18 @@ export function createFirehose<T>(
   const transform = new Transform({
     objectMode: true,
     transform(chunk: T, encoding: string, callback: TransformCallback) {
-      Promise.all(
-        transports.map(async (transport) => {
-          try {
-            await Promise.resolve(transport(chunk));
-          } catch (err) {
-            console.error(`Transport error: ${err}`);
-          }
-        }),
-      )
-        .then(() => callback(null, chunk))
-        .catch((err) => callback(err));
+      // Fire transports asynchronously without waiting
+      transports.forEach((transport) => {
+        try {
+          Promise.resolve(transport(chunk)).catch((err) =>
+            console.error(`Transport error: ${err}`),
+          );
+        } catch (err) {
+          console.error(`Transport error: ${err}`);
+        }
+      });
+      // Call callback immediately to allow the stream to drain
+      callback(null, chunk);
     },
   });
 
@@ -56,6 +54,17 @@ export function createFirehose<T>(
     console.error('Transform stream error:', err);
     // Don't let stream errors crash the process
   });
+
+  // Pipe the transform to a dummy writable to consume the readable side
+  // This prevents the readable buffer from filling and blocking the writable side
+  transform.pipe(
+    new Writable({
+      objectMode: true,
+      write(chunk, encoding, callback) {
+        callback();
+      },
+    }),
+  );
 
   // Writable stream for actors to push logs
   const writable = new Writable({
@@ -100,27 +109,27 @@ export function registerTransport<T>(
 }
 
 // Push a log entry to the firehose
-export function pushLog<T>(firehose: Firehose<T>, log: T): void {
-  // bufferize
-  buffer.push(log);
-  // If the firehose is not initialized, we can return early
+export async function pushLog<T extends ProcessableLogEntry>(
+  firehose: Firehose<T>,
+  log: T,
+): Promise<void> {
+  if (firehose.drainLock) {
+    await firehose.drainLock;
+  }
+
   if (firehose && firehose.writable) {
-    // push the buffered logs
-    while (buffer.length > 0) {
-      const log = buffer.shift();
-      if (log && log.level.priority <= firehose.level.priority) {
-        // Handle write errors gracefully and respect backpressure
-        firehose.writable.write(log, (error) => {
-          if (error) {
-            console.error('Logger write error:', error);
-            // Don't crash the process on write errors
-          }
-        });
-        // If write returns false, we should pause, but for logging we'll continue
-        // to prevent blocking the application
-      } else {
-        // Discard log entries above the configured level
-        void 0;
+    if (log.level.priority <= firehose.level.priority) {
+      if (!firehose.writable.write(log)) {
+        // Create a new drain lock only if one doesn't already exist.
+        if (!firehose.drainLock) {
+          firehose.drainLock = new Promise<void>((resolve) => {
+            firehose.writable.once('drain', () => {
+              firehose.drainLock = undefined; // Clear the lock once drained.
+              resolve();
+            });
+          });
+        }
+        await firehose.drainLock;
       }
     }
   }
@@ -128,10 +137,5 @@ export function pushLog<T>(firehose: Firehose<T>, log: T): void {
 
 // Get the writable stream for actors
 export function getWritable<T>(firehose: Firehose<T>): Writable {
-  if (!firehose || !firehose.writable) {
-    throw new Error(
-      'Firehose is not initialized or writable stream is missing',
-    );
-  }
   return firehose.writable;
 }

@@ -108,13 +108,18 @@ const awsec2 = async (): Promise<RunningHardware> => {
 
   // Check for EC2 instance metadata service
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 500); // Reduced to 500ms
+
     const response = await fetch(
       'http://169.254.169.254/latest/meta-data/instance-id',
       {
         method: 'GET',
-        signal: AbortSignal.timeout(1000), // 1 second timeout
+        signal: controller.signal,
       },
     );
+    clearTimeout(timeoutId);
+
     if (response.ok) {
       return {
         provider: 'aws',
@@ -124,6 +129,7 @@ const awsec2 = async (): Promise<RunningHardware> => {
       };
     }
   } catch {
+    // Explicitly handle timeout and network errors
     void 0;
   }
 

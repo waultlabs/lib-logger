@@ -89,10 +89,12 @@ const configure = async (options: LoggerOptions = {}): Promise<void> => {
       });
 
       // Process any pending logs in order
-      for (const entry of pendingLogs) {
-        pushLog(firehose!, entry);
+      while (pendingLogs.length > 0) {
+        const entry = pendingLogs.shift();
+        if (entry) {
+          await pushLog(firehose!, entry);
+        }
       }
-      pendingLogs = []; // Clear the queue
 
       pushLog(firehose!, {
         level: Levels.VERBOSE,
@@ -143,7 +145,7 @@ const log = async (level: LogLevel, record: LogEntry) => {
       await configure({}); // Trigger zeroconf autoconf if not configured yet
     } else {
       await configPromise; // Wait for configuration to complete
-      pushLog(firehose, entry);
+      await pushLog(firehose, entry);
     }
   } catch (error) {
     // Don't let logging errors crash the application
@@ -156,12 +158,12 @@ const log = async (level: LogLevel, record: LogEntry) => {
  */
 
 const createLogLevelMethod = (level: LogLevel) => {
-  return async (record: LogEntry | string): Promise<void> => {
+  return (record: LogEntry | string): void => {
     try {
       if (typeof record === 'string') {
-        await log(level, { message: record });
+        log(level, { message: record });
       } else {
-        await log(level, record);
+        log(level, record);
       }
     } catch (error) {
       // Prevent unhandled promise rejections from crashing the app

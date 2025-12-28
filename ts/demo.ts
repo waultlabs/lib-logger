@@ -1,5 +1,7 @@
 import logger from './libs/logger';
 
+let number = 0;
+
 (async () => {
   logger.out('direct out message');
 
@@ -25,6 +27,11 @@ import logger from './libs/logger';
     module: 'app/controller/service/user',
     userdata: { some: 'payload' },
   });
+
+  setInterval(() => {
+    logger.trace({ message: `periodic log #${++number}` });
+    logger.info({ message: `periodic log #${++number}` });
+  }, 2000);
 })().catch((error) => {
   console.error('Failed to configure logger:', error);
 });
